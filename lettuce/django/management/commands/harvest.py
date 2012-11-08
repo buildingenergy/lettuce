@@ -19,8 +19,8 @@ import sys
 from optparse import make_option
 from django.conf import settings
 from django.core.management.base import BaseCommand
-from django.test.utils import setup_test_environment
-from django.test.utils import teardown_test_environment
+from django.test.simple import DjangoTestSuiteRunner
+from django.core.management import call_command
 
 from lettuce import Runner
 from lettuce import registry
@@ -92,7 +92,21 @@ class Command(BaseCommand):
         return paths
 
     def handle(self, *args, **options):
-        setup_test_environment()
+        USE_SOUTH = getattr(settings, "SOUTH_TESTS_MIGRATE", True)
+        try:
+            if USE_SOUTH:
+                from south.management.commands import patch_for_test_db_setup
+                patch_for_test_db_setup()
+        except:
+            USE_SOUTH = False
+
+        self._test_runner = DjangoTestSuiteRunner(interactive=False)
+        DjangoTestSuiteRunner.setup_test_environment(self._test_runner)
+        self._created_db = DjangoTestSuiteRunner.setup_databases(self._test_runner)
+        call_command('syncdb', verbosity=0, interactive=False,)
+
+        if USE_SOUTH:
+            call_command('migrate', verbosity=0, interactive=False,)
 
         settings.DEBUG = options.get('debug', False)
 
@@ -149,5 +163,6 @@ class Command(BaseCommand):
         finally:
             registry.call_hook('after', 'harvest', results)
             server.stop(failed)
-            teardown_test_environment()
+            DjangoTestSuiteRunner.teardown_databases(self._test_runner, self._created_db)
+            DjangoTestSuiteRunner.teardown_test_environment(self._test_runner)
             raise SystemExit(int(failed))

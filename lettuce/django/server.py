@@ -222,34 +222,50 @@ class Server(object):
     def start(self):
         """Starts the webserver thread, and waits it to be available"""
         call_hook('before', 'runserver', self._actual_server)
-        if self._actual_server.should_serve_admin_media():
-            msg = "Preparing to serve django's admin site static files"
-            if getattr(settings, 'LETTUCE_SERVE_ADMIN_MEDIA', False):
-                msg += ' (as per settings.LETTUCE_SERVE_ADMIN_MEDIA=True)'
+        try:
+            # If we're in 1.4+, just use the built in LiveServer in django.
+            from django.test.testcases import LiveServerTestCase
+            os.environ['DJANGO_LIVE_TEST_SERVER_ADDRESS'] = "%s:%s" % (self.address, self.port,)
+            addrport = self.address, self.port
+            LiveServerTestCase.setUpClass()
+        except:
+            if self._actual_server.should_serve_admin_media():
+                msg = "Preparing to serve django's admin site static files"
+                if getattr(settings, 'LETTUCE_SERVE_ADMIN_MEDIA', False):
+                    msg += ' (as per settings.LETTUCE_SERVE_ADMIN_MEDIA=True)'
 
-            print "%s..." % msg
+                print "%s..." % msg
 
-        self._actual_server.start()
-        self._actual_server.wait()
+            self._actual_server.start()
+            self._actual_server.wait()
 
-        addrport = self.address, self._actual_server.port
-        if not self._actual_server.is_alive():
-            raise LettuceServerException(
-                'Lettuce could not run the builtin Django server at %s:%d"\n'
-                'maybe you forgot a "runserver" instance running ?\n\n'
-                'well if you really do not want lettuce to run the server '
-                'for you, then just run:\n\n'
-                'python manage.py --no-server' % addrport,
-            )
+            addrport = self.address, self._actual_server.port
+            if not self._actual_server.is_alive():
+                raise LettuceServerException(
+                    'Lettuce could not run the builtin Django server at %s:%d"\n'
+                    'maybe you forgot a "runserver" instance running ?\n\n'
+                    'well if you really do not want lettuce to run the server '
+                    'for you, then just run:\n\n'
+                    'python manage.py --no-server' % addrport,
+                )
 
         print "Django's builtin server is running at %s:%d" % addrport
 
     def stop(self, fail=False):
-        pid = self._actual_server.pid
-        if pid:
-            os.kill(pid, 9)
+        try:
+            # If we're in 1.4+, just use the built in LiveServer in django.
+            from django.test.testcases import LiveServerTestCase
+            LiveServerTestCase.tearDownClass()
+            code = 0
+        except:
+            from traceback import print_exc
+            print_exc()
+            pid = self._actual_server.pid
+            if pid:
+                os.kill(pid, 9)
 
-        code = int(fail)
+            code = int(fail)
+
         call_hook('after', 'runserver', self._actual_server)
         return sys.exit(code)
 

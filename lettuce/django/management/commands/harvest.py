@@ -159,10 +159,15 @@ class Command(BaseCommand):
             failed = True
             import traceback
             traceback.print_exc(e)
-
         finally:
-            registry.call_hook('after', 'harvest', results)
-            server.stop(failed)
-            DjangoTestSuiteRunner.teardown_databases(self._test_runner, self._created_db)
-            DjangoTestSuiteRunner.teardown_test_environment(self._test_runner)
-            raise SystemExit(int(failed))
+            try:
+                registry.call_hook('after', 'harvest', results)
+                stop_code = server.stop(failed)
+                if stop_code != 0:
+                    failed = True
+                DjangoTestSuiteRunner.teardown_databases(self._test_runner, self._created_db)
+                DjangoTestSuiteRunner.teardown_test_environment(self._test_runner)
+            except:
+                import traceback
+                traceback.print_exc()
+            sys.exit(int(failed))

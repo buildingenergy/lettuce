@@ -267,7 +267,7 @@ class Server(object):
             code = int(fail)
 
         call_hook('after', 'runserver', self._actual_server)
-        return sys.exit(code)
+        return code
 
     def url(self, url=""):
         base_url = "http://%s" % ThreadedServer.get_real_address(self.address)
